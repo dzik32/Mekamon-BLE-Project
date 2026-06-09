@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Iterable, Sequence
 
-from .protocol import PacketType, clamp_i8
+from .protocol import PacketType, TransformMode, clamp_i8
 
 # A per-leg joint triple: (hip, knee, thigh), each a signed int8 (-128..127).
 JointTriple = Sequence[int]
@@ -37,18 +37,26 @@ def game_state(state: int = 1, force_defaults: int | None = None) -> bytes:
     return bytes([PacketType.GameState, clamp_i8(state), clamp_i8(force_defaults)])
 
 
-def transform(strafe: int, forward: int, turn: int, mode: int | None = None) -> bytes:
+def transform(strafe: int, forward: int, turn: int,
+              mode: int = TransformMode.Walking) -> bytes:
     """Drive command — body transform / locomotion vector.
 
-    ``strafe``/``forward``/``turn`` are signed int8 (useful range ~±80, max ±127).
-    The proven 4-byte form omits *mode*; pass ``mode`` to send the official 5-byte form.
-    ``TransformationMode``: Rotation=0, Translation=1, CenterPoint=2, Walking=3,
-    DeadReckoning=4.
+    Wire form (confirmed from the app's ``TransformRequest.Encode``, 5 bytes)::
+
+        [6, mode, strafe, forward, turn]
+
+    ``mode`` is the byte **right after** the command id (default ``Walking`` = 3, which is
+    what the app's ``BuildMovementRequest`` uses for joystick driving). ``strafe`` =
+    AxisA (left/right), ``forward`` = AxisB, ``turn`` = AxisC — each a signed int8,
+    clamped to ±127 (the app clamps to ±127.0 in dead-reckoning).
     """
-    payload = [PacketType.Transform, clamp_i8(strafe), clamp_i8(forward), clamp_i8(turn)]
-    if mode is not None:
-        payload.append(clamp_i8(mode))
-    return bytes(payload)
+    return bytes([
+        PacketType.Transform,
+        clamp_i8(int(mode)),
+        clamp_i8(strafe),
+        clamp_i8(forward),
+        clamp_i8(turn),
+    ])
 
 
 def head_colour(r: int, g: int, b: int) -> bytes:
@@ -64,21 +72,26 @@ def set_leg_joint_angles(
 ) -> bytes:
     """Directly command all 12 joints (4 legs x {hip, knee, thigh}).
 
-    Payload (13 bytes)::
+    Each ``leg`` argument is given in the **intuitive ``(hip, knee, thigh)`` order**, but
+    the app serialises each leg on the wire as **knee, thigh, hip** (confirmed from
+    ``SetLegJointAngles.Encode``: it reads struct offsets +4, +8, +0). So the 13-byte
+    payload is::
 
-        [58, FL.hip, FL.knee, FL.thigh,
-             FR.hip, FR.knee, FR.thigh,
-             BL.hip, BL.knee, BL.thigh,
-             BR.hip, BR.knee, BR.thigh]
+        [58, FL.knee, FL.thigh, FL.hip,
+             FR.knee, FR.thigh, FR.hip,
+             BL.knee, BL.thigh, BL.hip,
+             BR.knee, BR.thigh, BR.hip]
 
-    Each joint is a signed int8. Units/scaling need live calibration (the robot
-    clamps to an "acceptable range"); start near 0 and move one joint at a time.
+    Each joint is the low byte of the angle (signed int8); the app does no scaling in
+    Encode (it clamps to an "acceptable range" beforehand). Units still need live
+    calibration — start near 0 and move one joint at a time.
     """
     payload = [int(PacketType.SetLegJointAngles)]
     for leg in (front_left, front_right, back_left, back_right):
         if len(leg) != 3:
             raise ValueError("each leg needs exactly 3 joints: (hip, knee, thigh)")
-        payload.extend(clamp_i8(j) for j in leg)
+        hip, knee, thigh = leg
+        payload += [clamp_i8(knee), clamp_i8(thigh), clamp_i8(hip)]  # wire order
     return bytes(payload)
 
 

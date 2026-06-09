@@ -26,8 +26,11 @@ wire = COBS( [cmd_id, payload_bytes...] )  ++  checksum  ++  0x00
 ```
 - `cmd_id` and payload are written as **signed** bytes (`-128..127`).
 - **COBS** = Constant Overhead Byte Stuffing (removes all 0x00 from the body).
-- **checksum** = `(sum(of the COBS-encoded bytes) + 1) mod 256`.
-  - (The Hackaday driver wrote this as `sum%256; ^=256; +=1; %=256`, which reduces to +1.)
+- **checksum** = `(sum(of the COBS-encoded bytes) mod 255) + 1`  → always in **1..255**.
+  - Confirmed by disassembling `HermesPacket.CalculateChecksum` (native uses the
+    `0x80808081` magic-number divide-by-255). Being 1..255 it can never equal the `0x00`
+    terminator. (A `(sum + 1) mod 256` approximation only holds while the byte sum < 255;
+    it diverges for bigger frames, e.g. a bright head colour.)
 - trailing `0x00` = frame terminator.
 
 Verified frames (computed == documented):
@@ -56,13 +59,19 @@ Field types/offsets are from `dump.cs`. Simple ones are byte-exact; multi-byte o
 inside the native `Encode()` (needs Ghidra on `libil2cpp.so` to confirm — see §6).
 
 ### Transform — `cmd 6`  (drive)  `dump.cs:448152`
-App struct: `float AxisA, AxisB, AxisC; Mode`. Proven simple wire form:
+App struct: `float AxisA, AxisB, AxisC; Mode`. **Confirmed wire form** (from
+`TransformRequest.Encode` @ `0x1866DE8`, 5 bytes — note **Mode is byte #1**):
 ```
-[6, strafe, fwd, turn]   # signed int8 each, useful range ~±80, max ±127
+[6, Mode, AxisA, AxisB, AxisC]
+#     Mode = TransformMode (Rotation=0, Translation=1, CenterPoint=2, Walking=3, DeadReckoning=4)
+#     AxisA = strafe (x), AxisB = forward (y), AxisC = turn (rotation)
 ```
-`TransformationMode`: Rotation=0, Translation=1, CenterPoint=2, Walking=3, DeadReckoning=4.
-Helpers: `BuildMovementRequest(translation, rotation)`,
-`BuildDeadReckoningRequest(forwardDist, horizontalDist, rotationDeg)` = move an exact amount.
+Each axis is a **plain `(byte)(int)float`** — *no scale factor*; the float values are
+already in robot units. The app clamps axes to **±127.0** (`0x42FE0000`/`0xC2FE0000`
+constants in `BuildDeadReckoningRequest`). For joystick driving the app calls
+`BuildMovementRequest(translation, rotation)` which sets **Mode = Walking (3)**.
+The proven minimal Hackaday frame `[6, strafe, fwd, turn]` is the same axes with the
+Mode byte omitted (robot tolerates the shorter packet).
 
 ### HeadColourSet — `cmd 46`  (head RGB LED)  `dump.cs:446407`
 ```
@@ -73,9 +82,19 @@ Helpers: `BuildMovementRequest(translation, rotation)`,
 Fields: `GameStateType GameState; bool ForceDefaults`. Wire: `[7, state, forceDefaults]`.
 
 ### SetLegJointAngles — `cmd 58`  (DIRECT per-joint control)  `dump.cs:447719`
-Fields: 4× `JointAngles` = FrontLeft, FrontRight, BackLeft, BackRight.
-Each `JointAngles` = 12 bytes = **3 joints/leg** → robot is **12-DOF**.
-Wire: `[58, FL(3 joints), FR(3), BL(3), BR(3)]`. (Per-joint width/units: confirm via §6.)
+Fields: 4× `JointAngles{int Hip,Knee,Thigh}` = FrontLeft, FrontRight, BackLeft, BackRight
+→ robot is **12-DOF**. **Confirmed wire form** (from `SetLegJointAngles.Encode` @
+`0x185DAA8`, 13 bytes — the per-leg order on the wire is **Knee, Thigh, Hip**, i.e. it reads
+struct offsets +4, +8, +0):
+```
+[58, FL.Knee, FL.Thigh, FL.Hip,
+     FR.Knee, FR.Thigh, FR.Hip,
+     BL.Knee, BL.Thigh, BL.Hip,
+     BR.Knee, BR.Thigh, BR.Hip]
+```
+Each joint = the **low byte (int8)** of the angle; Encode does no scaling (the app clamps
+to an acceptable range first via `JointAngles.ClampToAcceptableRange`). The int8→physical
+angle mapping (units/sign per joint) still needs live calibration on the robot.
 Related: `SetLegControlPoint=59` (Cartesian foot target), `SetLegCompliance=61`,
 `SetupJointAngles=60` (enable joint-angle streaming), `StreamJointAngles=195`.
 

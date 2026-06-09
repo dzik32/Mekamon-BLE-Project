@@ -78,8 +78,15 @@ def cobs_decode(data: bytes) -> bytes:
 #  Framing
 # --------------------------------------------------------------------------- #
 def checksum(cobs_bytes: bytes) -> int:
-    """Hermes checksum = (sum(cobs bytes) + 1) mod 256."""
-    return (sum(cobs_bytes) + 1) & 0xFF
+    """Hermes checksum = (sum(cobs bytes) mod 255) + 1.
+
+    Confirmed by disassembling ``HermesPacket.CalculateChecksum`` (the native code uses
+    the 0x80808081 magic-number divide-by-255). The result is always in **1..255**, so it
+    can never equal the 0x00 frame terminator. (An earlier ``(sum + 1) mod 256`` guess is
+    only correct while the byte sum stays below 255 — it diverges for larger frames such as
+    a bright head colour.)
+    """
+    return (sum(cobs_bytes) % 255) + 1
 
 
 def build_frame(payload: bytes | list[int]) -> bytes:
@@ -227,3 +234,14 @@ class PacketType(IntEnum):
         obj._name_ = f"Unknown_{value}"
         obj._value_ = value
         return obj
+
+
+class TransformMode(IntEnum):
+    """``Transform`` (cmd 6) mode byte. The app drives with ``Walking``
+    (``BuildMovementRequest`` sets mode 3); ``BuildDeadReckoning`` uses mode 4."""
+
+    Rotation = 0
+    Translation = 1
+    CenterPoint = 2
+    Walking = 3
+    DeadReckoning = 4

@@ -105,18 +105,19 @@ Transport is the **Nordic UART Service** (`6e400001-…`, write `…0002`, notif
 Each command is `wire = COBS(payload) + checksum + 0x00`, where
 `payload = [cmd_id, *signed_bytes]` and `checksum = (sum(cobs_bytes) + 1) mod 256`.
 Connect handshake: `ConnectionEstablished[16]` → `GameState[7,1]` → `Transform[6,0,0,0]`,
-then stream `Transform`. Full details in **[`MEKAMON_PROTOCOL.md`](MEKAMON_PROTOCOL.md)**;
-the 12-joint encoding is in **[`docs/joint-encoding.md`](docs/joint-encoding.md)**.
+then stream `Transform`. Full details in **[`MEKAMON_PROTOCOL.md`](MEKAMON_PROTOCOL.md)**,
+the end-to-end send path (app → BLE) in **[`docs/command-pipeline.md`](docs/command-pipeline.md)**,
+and the 12-joint encoding in **[`docs/joint-encoding.md`](docs/joint-encoding.md)**.
 
 ## Status & roadmap
 
 | Area | State |
 |------|-------|
-| COBS + checksum framing | ✅ byte-exact, unit-tested against known frames |
+| COBS + `mod-255` checksum framing | ✅ byte-exact (confirmed from native `CalculateChecksum`), unit-tested |
 | Scan / connect / handshake | ✅ implemented |
-| Drive (Transform) | ✅ implemented (proven wire form) |
-| Head LED | ✅ implemented (proven wire form) |
-| 12-joint control (`SetLegJointAngles`) | ✅ **structure confirmed** (13-byte, int8×12); ⚠️ angle **scaling needs live calibration** |
+| Drive (Transform) | ✅ confirmed wire form `[6, Mode, strafe, fwd, turn]`, Mode=Walking, ±127 |
+| Head LED | ✅ confirmed `[46, R, G, B]` |
+| 12-joint control (`SetLegJointAngles`) | ✅ **wire order confirmed** (13-byte, per-leg Knee/Thigh/Hip); ⚠️ angle **scaling needs live calibration** |
 | Animations / gaits / stance | 🟡 command ids known; payload layouts to verify live |
 | Response parsing (battery, acks) | 🟡 framing done; per-type decoders TBD |
 

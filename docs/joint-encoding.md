@@ -39,14 +39,30 @@ SetLegJointAngles.get_UnstuffedLength @0x5D3E2C:  mov r0, #0xD = 13
   (The proven Hackaday `[6,strafe,fwd,turn]` simply omits the trailing `Mode` byte.)
 * **SetLegJointAngles = 13 = cmd(1) + 12 joints → each joint is one signed int8.**
 
-So the on-wire payload is exactly:
+### Confirmed wire order (from `SetLegJointAngles.Encode` @ `0x185DAA8`)
+
+Disassembly shows Encode allocates `byte[13]`, writes cmd `0x3A`=58, then for each leg
+reads struct offsets **+4 (Knee), +8 (Thigh), +0 (Hip)** and `strb`s the low byte:
 
 ```
-[58, FL.Hip, FL.Knee, FL.Thigh,
-     FR.Hip, FR.Knee, FR.Thigh,
-     BL.Hip, BL.Knee, BL.Thigh,
-     BR.Hip, BR.Knee, BR.Thigh]      # 13 bytes, each joint int8 (-128..127)
+ldr r6,[r5,#4]  ; strb -> data[1]   = FL.Knee
+ldr r6,[r5,#8]  ; strb -> data[2]   = FL.Thigh
+ldr r6,[r5]     ; strb -> data[3]   = FL.Hip
+ldr r6,[r5,#0x10]; ...              = FR.Knee   (FrontRight base = 0x0C)
+... (FR.Thigh, FR.Hip, then BackLeft @0x18, BackRight @0x24)
 ```
+
+So the on-wire payload is — note the **per-leg order is Knee, Thigh, Hip**:
+
+```
+[58, FL.Knee, FL.Thigh, FL.Hip,
+     FR.Knee, FR.Thigh, FR.Hip,
+     BL.Knee, BL.Thigh, BL.Hip,
+     BR.Knee, BR.Thigh, BR.Hip]      # 13 bytes, each joint int8 (low byte, no scaling)
+```
+
+(`mekamon.commands.set_leg_joint_angles` still takes intuitive `(hip, knee, thigh)`
+tuples and reorders to this wire layout for you.)
 
 then framed as usual: `COBS(payload) + checksum + 0x00`.
 
