@@ -11,6 +11,22 @@ a Python library, a desktop **GUI**, and **direct control of all 12 leg joints**
 
 ---
 
+## ⬇️ Just want to use it? (no Python, nothing to install)
+
+The app ships as **one self-contained `MekamonController.exe`** — Python, the BLE stack
+and the GUI are all bundled inside it. There is nothing to install.
+
+1. Download **`MekamonController.exe`** from the **[Releases page](../../releases)**
+   (or the newest **[Actions build](../../actions)** → artifacts).
+2. Turn **Bluetooth on** and power up the robot.
+3. **Double-click** `MekamonController.exe`. Click **Scan**, select your robot, **Connect**.
+
+> Windows SmartScreen may say "unknown publisher" (the app isn't code-signed yet) —
+> click **More info → Run anyway**. You need a working **Bluetooth LE** adapter; most
+> laptops have one built in, otherwise use a cheap USB BLE dongle.
+
+The rest of this README is for developers who want to run from source or rebuild the exe.
+
 ## Features
 
 - 🦿 **Full limb control** — command all 12 joints directly (4 legs × hip/knee/thigh).
@@ -106,6 +122,18 @@ the 12-joint encoding is in **[`docs/joint-encoding.md`](docs/joint-encoding.md)
 
 **Next:** live-calibrate joint scaling on the robot, then add a calibration table so the
 limb sliders read real degrees; decode telemetry responses (battery, IMU, on-floor).
+
+## Build the .exe yourself
+
+```powershell
+python -m pip install -r requirements.txt pyinstaller Pillow
+python tools/make_icon.py     # regenerate assets/icon.ico (optional)
+python build.py               # -> dist/MekamonController.exe (single file)
+```
+
+`build.py` bundles the WinRT Bluetooth backend that Bleak needs on Windows. CI does the
+same automatically — see `.github/workflows/build.yml` (push a `vX.Y.Z` tag to publish a
+Release with the exe attached, or run the workflow manually for a downloadable artifact).
 
 ## Repository layout
 
