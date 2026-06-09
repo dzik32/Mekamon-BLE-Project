@@ -1,0 +1,5 @@
+# Runtime dependencies for the MekaMon BLE controller + GUI.
+# Tested on Python 3.12 (Windows 10).  PySide6 wheels may lag the newest CPython,
+# so prefer 3.11/3.12 if you hit an install error.
+bleak>=0.22
+PySide6>=6.6

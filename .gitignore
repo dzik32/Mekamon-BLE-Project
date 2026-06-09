@@ -1,0 +1,34 @@
+# --- large / copyrighted reverse-engineering inputs (NOT redistributable) ---
+MekaMon_2.3.0.apk
+*.apk
+# decompile artifacts (libil2cpp.so, global-metadata.dat, dump.cs, DummyDll, tools)
+il2cpp/
+*.so
+*.dat
+
+# --- local tooling / secrets ---
+.claude/
+.env
+*.pat
+*.token
+
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- editors / OS ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
