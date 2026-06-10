@@ -44,6 +44,11 @@ def build_args(name="MekamonController", entry=os.path.join("gui", "app.py"),
     args.append("--windowed" if windowed else "--console")
     for m in WINRT_MODULES:
         args += ["--hidden-import", m]
+    # bundle the recovered animations + gait presets so the GUI can play them
+    for sub in ("motions", "gaits"):
+        d = os.path.join(ROOT, "assets", sub)
+        if os.path.isdir(d):
+            args += ["--add-data", f"{d}{os.pathsep}assets/{sub}"]
     if os.path.exists(ICON):
         args += ["--icon", ICON]
     return args

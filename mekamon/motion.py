@@ -15,6 +15,7 @@ import glob
 import gzip
 import json
 import os
+import sys
 from dataclasses import dataclass
 
 from .commands import NEUTRAL_POSE
@@ -73,8 +74,10 @@ def load_motion(path: str, fps: int = DEFAULT_FPS) -> Motion:
 
 
 def bundled_motions_dir() -> str:
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                        "assets", "motions")
+    # In a PyInstaller bundle the assets live under sys._MEIPASS.
+    base = getattr(sys, "_MEIPASS",
+                   os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(base, "assets", "motions")
 
 
 def list_motions(directory: str | None = None) -> list:
