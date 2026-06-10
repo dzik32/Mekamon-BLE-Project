@@ -29,10 +29,15 @@ The rest of this README is for developers who want to run from source or rebuild
 
 ## Features
 
-- 🦿 **Full limb control** — command all 12 joints directly (4 legs × hip/knee/thigh).
 - 🎮 **Drive** — virtual joystick + keyboard (WASD / Q-E / Space).
+- 🦿 **Full limb control** — all 12 joints directly, with the **real 0–255 ranges** and
+  standing pose recovered from the app data (this is what makes it actually move).
+- 💃 **Play your saved animations** — replays recovered MekaMotion `.motion` files by
+  streaming joint poses (8 of the user's animations bundled).
+- 🦗 **Gait tuning** — all 10 gait parameters with the float→byte scaling decoded, plus
+  recovered presets (fast trot / slow crawl).
+- 🎬 **Animations / steps / body modes** — `PlayAnimation`, `TakeSteps`, `KinematicStance`.
 - 💡 **Head LED** — set any RGB colour.
-- 🎬 **Animations** — trigger built-in animations by id.
 - 🧩 **Clean Python API** — `bleak`-based, byte-exact framing, fully scriptable.
 - 🛑 **Emergency stop** baked into the controller and GUI.
 
@@ -108,7 +113,8 @@ Connect handshake: `ConnectionEstablished[16]` → `GameState[7,1]` → `Transfo
 then stream `Transform`. Full details in **[`MEKAMON_PROTOCOL.md`](MEKAMON_PROTOCOL.md)**,
 the end-to-end send path (app → BLE) in **[`docs/command-pipeline.md`](docs/command-pipeline.md)**,
 every movement command in **[`docs/movement.md`](docs/movement.md)**,
-and the 12-joint encoding in **[`docs/joint-encoding.md`](docs/joint-encoding.md)**.
+the 12-joint encoding in **[`docs/joint-encoding.md`](docs/joint-encoding.md)**,
+and what the recovered phone data unlocked in **[`docs/recovered-data.md`](docs/recovered-data.md)**.
 
 ## Status & roadmap
 
@@ -119,13 +125,15 @@ and the 12-joint encoding in **[`docs/joint-encoding.md`](docs/joint-encoding.md
 | Drive (Transform) | ✅ confirmed `[6, Mode, forward, strafe, turn]` (axes verified live), Mode=Walking, ±127 |
 | Head LED | ✅ confirmed `[46, R, G, B]` |
 | Walk steps / animations / stance | ✅ decoded: TakeSteps `[224,n]`, PlayAnimation `[220,id,…]`, KinematicStance `[8,type]` |
-| Gait tuning (`GaitSetAll`) | ✅ 11-byte layout + 10 params decoded; raw bytes (float→byte scaling TBD) |
-| 12-joint control (`SetLegJointAngles`) | ✅ wire order confirmed; ⚠️ angle **scaling needs live calibration** (next) |
+| Gait tuning (`GaitSetAll`) | ✅ 11-byte layout + 10 params + **float→byte scaling decoded** (0..1 × 255); presets bundled |
+| 12-joint control (`SetLegJointAngles`) | ✅ wire order + **scaling solved** (unsigned 0–255, real ranges + neutral from recovered animations) |
+| Animation playback | ✅ recovered `.motion` files replayed by streaming joint poses |
+| Official firmware image | ✅ `firmware.json` V02.17.03 recovered + backed up (reference only — no flashing) |
 | Animations / gaits / stance | 🟡 command ids known; payload layouts to verify live |
 | Response parsing (battery, acks) | 🟡 framing done; per-type decoders TBD |
 
-**Next:** live-calibrate joint scaling on the robot, then add a calibration table so the
-limb sliders read real degrees; decode telemetry responses (battery, IMU, on-floor).
+**Next:** verify limb control + animation playback on the robot (Bluetooth required);
+decode telemetry responses (battery, IMU, on-floor); optional gamepad driving.
 
 ## Build the .exe yourself
 

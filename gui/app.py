@@ -41,12 +41,23 @@ from mekamon import (
     GaitType,
     KinematicStanceType,
     MekamonController,
+    commands,
+    motion,
 )
 
 DRIVE_SCALE = 80          # joystick edge -> int8 drive value (max useful ~80)
 TURN_SCALE = 80
-JOINTS = ["Hip", "Knee", "Thigh"]
+JOINTS = ["Hip", "Knee", "Thigh"]          # display order
 LEGS = ["Front Left", "Front Right", "Back Left", "Back Right"]
+# real per-joint ranges + standing pose, recovered from saved animations
+JOINT_RANGE = commands.JOINT_RANGES        # {"hip":(100,200),"knee":(100,200),"thigh":(50,150)}
+NEUTRAL = dict(zip(["Hip", "Knee", "Thigh"], commands.NEUTRAL_POSE))   # 150,180,125
+
+# gait presets recovered from the phone (.gait files), as normalised floats
+GAIT_PRESETS = {
+    "szybko (fast trot)": (0.5, 0.55, 1.0, 0.533, 0.733, 0.698, 2, 0.344, 0.0, 0.0),
+    "Hehiv… (slow crawl)": (0.5, 0.55, 0.425, 0.23, 0.733, 1.0, 4, 0.733, 0.0, 0.0),
+}
 
 
 # --------------------------------------------------------------------------- #
@@ -150,6 +161,7 @@ class MainWindow(QMainWindow):
         col.addWidget(self._build_drive_box())
         col.addWidget(self._build_head_box())
         col.addWidget(self._build_moves_box())
+        col.addWidget(self._build_saved_anim_box())
         col.addStretch(1)
         return col
 
@@ -270,42 +282,98 @@ class MainWindow(QMainWindow):
         return box
 
     def _build_gait_box(self):
-        box = QGroupBox("Gait tuning  (raw 0–255 bytes — experiment)")
+        box = QGroupBox("Gait tuning  (0–100%; recovered presets included)")
         v = QVBoxLayout(box)
+        hp = QHBoxLayout()
+        hp.addWidget(QLabel("Preset:"))
+        for name, vals in GAIT_PRESETS.items():
+            b = QPushButton(name)
+            b.clicked.connect(lambda _=False, x=vals: self._load_gait_preset(x))
+            hp.addWidget(b)
+        hp.addStretch(1)
+        v.addLayout(hp)
+
         grid = QGridLayout()
-        self.gait_sliders = {}
-        defaults = {GaitParameterType.GaitType: int(GaitType.Trot)}
-        for i, p in enumerate(GaitParameterType):
-            grid.addWidget(QLabel(p.name), i, 0)
-            s = QSlider(Qt.Horizontal)
-            s.setRange(0, 255)
-            s.setValue(defaults.get(p, 128))
-            lbl = QLabel(str(s.value()))
-            lbl.setMinimumWidth(30)
-            s.valueChanged.connect(lambda val, l=lbl: l.setText(str(val)))
-            grid.addWidget(s, i, 1)
-            grid.addWidget(lbl, i, 2)
-            self.gait_sliders[p] = s
+        self.gait_sliders = {}              # normalised params -> slider (0..100)
+        for row, p in enumerate(GaitParameterType):
+            grid.addWidget(QLabel(p.name), row, 0)
+            if p == GaitParameterType.GaitType:
+                self.gait_type_combo = QComboBox()
+                for gt in GaitType:
+                    self.gait_type_combo.addItem(gt.name, int(gt))
+                grid.addWidget(self.gait_type_combo, row, 1, 1, 2)
+            else:
+                s = QSlider(Qt.Horizontal)
+                s.setRange(0, 100)
+                s.setValue(50)
+                lbl = QLabel("50%")
+                lbl.setMinimumWidth(38)
+                s.valueChanged.connect(lambda val, l=lbl: l.setText(f"{val}%"))
+                grid.addWidget(s, row, 1)
+                grid.addWidget(lbl, row, 2)
+                self.gait_sliders[p] = s
         v.addLayout(grid)
-        self.gait_apply = QPushButton("Apply gait")
-        self.gait_apply.clicked.connect(self._apply_gait)
-        v.addWidget(self.gait_apply)
+        applyb = QPushButton("Apply gait")
+        applyb.clicked.connect(self._apply_gait)
+        v.addWidget(applyb)
         return box
 
+    def _load_gait_preset(self, vals):
+        for i, p in enumerate(GaitParameterType):
+            if p == GaitParameterType.GaitType:
+                idx = self.gait_type_combo.findData(int(vals[i]))
+                if idx >= 0:
+                    self.gait_type_combo.setCurrentIndex(idx)
+            else:
+                self.gait_sliders[p].setValue(round(vals[i] * 100))
+
     def _apply_gait(self):
-        params = [self.gait_sliders[p].value() for p in GaitParameterType]
-        self.controller.gait_set_all(params)
-        self._log(f"-> GaitSetAll {params}")
+        floats = []
+        for p in GaitParameterType:
+            if p == GaitParameterType.GaitType:
+                floats.append(self.gait_type_combo.currentData())
+            else:
+                floats.append(self.gait_sliders[p].value() / 100.0)
+        self.controller.play_gait_preset(floats)
+        self._log("-> gait applied")
+
+    def _build_saved_anim_box(self):
+        box = QGroupBox("Saved animations (recovered from your phone)")
+        h = QHBoxLayout(box)
+        self.motion_combo = QComboBox()
+        self._motions = motion.list_motions()
+        for title, path in self._motions:
+            self.motion_combo.addItem(title, path)
+        h.addWidget(self.motion_combo, 1)
+        play = QPushButton("Play")
+        play.clicked.connect(self._play_motion)
+        h.addWidget(play)
+        stopb = QPushButton("Stop")
+        stopb.clicked.connect(self.controller.stop_motion)
+        h.addWidget(stopb)
+        return box
+
+    def _play_motion(self):
+        path = self.motion_combo.currentData()
+        if not path:
+            return
+        try:
+            m = motion.load_motion(path)
+        except Exception as e:
+            self._log(f"motion load failed: {e}")
+            return
+        self._log(f"playing '{m.title}' ({m.num_frames} frames, {m.duration:.1f}s)")
+        self.controller.play_motion(m)
 
     def _build_limbs_box(self):
-        box = QGroupBox("Limb control — 12 joints (signed int8; scaling needs live calibration)")
+        box = QGroupBox("Limb control — 12 joints (0–255; Hip 100–200, Knee 100–200, Thigh 50–150)")
         outer = QVBoxLayout(box)
         top = QHBoxLayout()
         self.joint_mode = QCheckBox("Direct joint mode (stream poses)")
         self.joint_mode.toggled.connect(self._on_joint_mode)
         top.addWidget(self.joint_mode)
         top.addStretch(1)
-        neutral = QPushButton("Neutral (all 0)")
+        neutral = QPushButton("Stand (neutral pose)")
         neutral.clicked.connect(self._neutral_joints)
         top.addWidget(neutral)
         outer.addLayout(top)
@@ -319,9 +387,10 @@ class MainWindow(QMainWindow):
             for joint in JOINTS:
                 legbox.addWidget(QLabel(joint))
                 s = QSlider(Qt.Horizontal)
-                s.setRange(-128, 127)
-                s.setValue(0)
-                lbl = QLabel("0")
+                lo, hi = JOINT_RANGE[joint.lower()]
+                s.setRange(lo, hi)
+                s.setValue(NEUTRAL[joint])
+                lbl = QLabel(str(NEUTRAL[joint]))
                 lbl.setMinimumWidth(30)
                 s.valueChanged.connect(
                     lambda val, l=lbl: l.setText(str(val))
@@ -456,12 +525,11 @@ class MainWindow(QMainWindow):
         self.controller.set_joints(*legs)
 
     def _neutral_joints(self):
-        for s in self.joint_sliders.values():
+        for (leg, joint), s in self.joint_sliders.items():
             s.blockSignals(True)
-            s.setValue(0)
+            s.setValue(NEUTRAL[joint])
             s.blockSignals(False)
-        for lbl in self.joint_labels.values():
-            lbl.setText("0")
+            self.joint_labels[(leg, joint)].setText(str(NEUTRAL[joint]))
         self._push_joints()
 
     # ---- head ----------------------------------------------------------- #

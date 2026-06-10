@@ -1,0 +1,24 @@
+{
+  "kinematicStanceType": 3,
+  "headColor": {
+    "r": 0,
+    "g": 0,
+    "b": 255,
+    "a": 255
+  },
+  "FileName": "acbefc30-db40-4d73-b90b-953ea53a97c0",
+  "title": "Hehivsmehcstku",
+  "uuid": "acbefc30-db40-4d73-b90b-953ea53a97c0",
+  "gaitParameters": {
+    "stanceAngle": 0.5,
+    "stanceDistance": 0.55,
+    "walkingSpeed": 0.424749374,
+    "stepDuration": 0.230162889,
+    "stepShift": 0.733333349,
+    "stepHeight": 1.0,
+    "gaitType": 4,
+    "bodyHeight": 0.7328508,
+    "crankRandomness": 0.0,
+    "stanceRandomness": 0.0
+  }
+}

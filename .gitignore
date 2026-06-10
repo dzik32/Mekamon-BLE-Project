@@ -6,6 +6,15 @@ il2cpp/
 *.so
 *.dat
 
+# --- recovered phone data: firmware image + personal/account data (never commit) ---
+firmware.json
+recovered/
+**/MEKAMON FILES*/
+account.json
+player.json
+authentication.json
+bluetoothdevices.json
+
 # --- local tooling / secrets ---
 .claude/
 .env

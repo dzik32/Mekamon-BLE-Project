@@ -19,14 +19,21 @@ from typing import Iterable, Sequence
 from .protocol import (
     AnimationTransformType,
     GaitParameterType,
+    GaitType,
     KinematicStanceType,
     PacketType,
     TransformMode,
     clamp_i8,
+    clamp_u8,
 )
 
-# A per-leg joint triple: (hip, knee, thigh), each a signed int8 (-128..127).
+# A per-leg joint triple: (hip, knee, thigh), each an UNSIGNED byte (0..255).
 JointTriple = Sequence[int]
+
+# Real operating ranges + a verified standing pose, recovered from the app's saved
+# MekaMotion animations (joint values are unsigned, ~0..255, NOT signed -128..127).
+JOINT_RANGES = {"hip": (100, 200), "knee": (100, 200), "thigh": (50, 150)}
+NEUTRAL_POSE = (150, 180, 125)   # (hip, knee, thigh) — all four legs at this = stand
 
 
 def connection_established() -> bytes:
@@ -89,16 +96,17 @@ def set_leg_joint_angles(
              BL.knee, BL.thigh, BL.hip,
              BR.knee, BR.thigh, BR.hip]
 
-    Each joint is the low byte of the angle (signed int8); the app does no scaling in
-    Encode (it clamps to an "acceptable range" beforehand). Units still need live
-    calibration — start near 0 and move one joint at a time.
+    Each joint is an **unsigned byte (0..255)** — recovered MekaMotion animations use
+    Hip ~100..200, Knee ~107..200, Thigh ~50..150, with a standing pose of
+    ``(hip=150, knee=180, thigh=125)`` (see :data:`NEUTRAL_POSE` / :data:`JOINT_RANGES`).
+    Sending 0 is an extreme, not neutral. The app does no scaling in Encode.
     """
     payload = [int(PacketType.SetLegJointAngles)]
     for leg in (front_left, front_right, back_left, back_right):
         if len(leg) != 3:
             raise ValueError("each leg needs exactly 3 joints: (hip, knee, thigh)")
         hip, knee, thigh = leg
-        payload += [clamp_i8(knee), clamp_i8(thigh), clamp_i8(hip)]  # wire order
+        payload += [clamp_u8(knee), clamp_u8(thigh), clamp_u8(hip)]  # wire order
     return bytes(payload)
 
 
@@ -186,9 +194,27 @@ def setup_heartbeat(period_ms: int = 0) -> bytes:
 
 
 def neutral_joint_angles() -> bytes:
-    """All 12 joints at 0 (a safe-ish neutral). Calibrate the true rest pose live."""
-    z = (0, 0, 0)
-    return set_leg_joint_angles(z, z, z, z)
+    """All four legs at the recovered standing pose (:data:`NEUTRAL_POSE`)."""
+    return set_leg_joint_angles(NEUTRAL_POSE, NEUTRAL_POSE, NEUTRAL_POSE, NEUTRAL_POSE)
+
+
+def gait_params_to_bytes(stance_angle=0.5, stance_distance=0.55, walking_speed=1.0,
+                         step_duration=0.5, step_shift=0.7, step_height=0.7,
+                         gait_type=GaitType.Trot, body_height=0.5,
+                         crank_randomness=0.0, stance_randomness=0.0) -> list:
+    """Convert the 10 gait parameters (floats 0..1, plus the GaitType enum) to wire bytes.
+
+    Recovered ``.gait`` presets store these as normalised floats; the wire byte is
+    ``round(value * 255)`` for every parameter except ``gait_type`` (raw enum: 2=Trot,
+    4=Crawl). Order matches :class:`GaitParameterType`. Pass the result to
+    :func:`gait_set_all`.
+    """
+    def f(x):
+        return clamp_u8(max(0.0, min(1.0, float(x))) * 255)
+
+    return [f(stance_angle), f(stance_distance), f(walking_speed), f(step_duration),
+            f(step_shift), f(step_height), int(gait_type) & 0xFF, f(body_height),
+            f(crank_randomness), f(stance_randomness)]
 
 
 def raw(cmd_id: int, args: Iterable[int] = ()) -> bytes:

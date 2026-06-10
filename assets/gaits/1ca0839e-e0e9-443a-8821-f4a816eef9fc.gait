@@ -1,0 +1,18 @@
+{
+  "kinematicStanceType": 3,
+  "FileName": "1ca0839e-e0e9-443a-8821-f4a816eef9fc",
+  "title": "szybko",
+  "uuid": "1ca0839e-e0e9-443a-8821-f4a816eef9fc",
+  "gaitParameters": {
+    "stanceAngle": 0.5,
+    "stanceDistance": 0.55,
+    "walkingSpeed": 1.0,
+    "stepDuration": 0.533333361,
+    "stepShift": 0.733333349,
+    "stepHeight": 0.697608232,
+    "gaitType": 2,
+    "bodyHeight": 0.343850553,
+    "crankRandomness": 0.0,
+    "stanceRandomness": 0.0
+  }
+}

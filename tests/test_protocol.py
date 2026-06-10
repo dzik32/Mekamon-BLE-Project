@@ -83,6 +83,27 @@ def test_gait_set_all_requires_10():
     raise AssertionError("gait_set_all should reject a non-10-length list")
 
 
+def test_joints_are_unsigned_not_clamped_to_127():
+    # The limb fix: joint values are unsigned 0..255; 150/180/200 must NOT clamp to 127.
+    p = commands.set_leg_joint_angles((150, 180, 125), (200, 100, 50),
+                                      (150, 180, 125), (150, 180, 125))
+    # wire order per leg is knee, thigh, hip
+    assert list(p[1:4]) == [180, 125, 150]
+    assert list(p[4:7]) == [100, 50, 200]      # 200 preserved, not 127
+    # neutral pose = standing
+    assert commands.NEUTRAL_POSE == (150, 180, 125)
+    assert commands.neutral_joint_angles()[1:4] == bytes([180, 125, 150])
+
+
+def test_gait_params_to_bytes_scaling():
+    b = commands.gait_params_to_bytes(0.5, 0.55, 1.0, 0.533, 0.733, 0.698, 2, 0.344, 0.0, 0.0)
+    assert len(b) == 10
+    assert b[2] == 255          # walkingSpeed 1.0 -> 255
+    assert b[6] == 2            # gaitType raw enum (Trot)
+    assert b[0] == round(0.5 * 255)
+    assert b[8] == 0 and b[9] == 0
+
+
 def test_cobs_roundtrip():
     for data in [b"", b"\x06\x00\x00\x00", b"\x10", bytes(range(256)), b"\x00" * 10]:
         assert cobs_decode(cobs_encode(data)) == data

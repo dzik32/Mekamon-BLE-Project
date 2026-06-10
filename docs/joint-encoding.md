@@ -66,20 +66,25 @@ tuples and reorders to this wire layout for you.)
 
 then framed as usual: `COBS(payload) + checksum + 0x00`.
 
-## What is still unknown — the scaling/units
+## The scaling/units — RESOLVED from recovered animations
 
-The struct stores joints as `int` with `NormalizedHip/Knee/Thigh` getters and a
-`ClampToAcceptableRange()`, so the wire int8 is a quantised/clamped angle, but the
-exact mapping (degrees? a normalised step? per-joint offset and sign) lives in the
-native `Encode()` body and is **not** recoverable as a constant. Plan: calibrate live.
+Recovered `.motion` files (see [recovered-data.md](recovered-data.md)) store real joint
+keyframes, which settle the scaling: **joint values are unsigned (~0..255), not signed
+−128..127.** Measured across 24 animations:
 
-### Live calibration plan
-1. Connect, enable joint mode (`SetupJointAngles` best-effort), stream a neutral pose.
-2. Move **one joint by a small amount** (e.g. ±10) and observe the limb.
-3. Record the int8 → physical-angle relationship per joint; note sign and safe range.
-4. Fill a calibration table so the GUI can show real degrees.
+| joint | range | neutral (standing) |
+|-------|-------|--------------------|
+| Hip   | 100..200 | **150** |
+| Knee  | 107..200 | **180** |
+| Thigh | 50..150  | **125** |
 
-Stay near 0 and step gently — the robot clamps internally but mechanical limits are real.
+Standing pose `(hip 150, knee 180, thigh 125)` is verified (all four legs identical in
+"Little Wave" frame 0). So the byte stored by `strb` is an **unsigned** joint position.
+This is why early limb control failed: signed `clamp_i8` capped real values (>127) to 127,
+and 0 was treated as neutral (it's actually an extreme). The code now uses `clamp_u8`,
+real per-joint ranges, the standing pose as neutral, and enters
+`KinematicStance(LegJointAngles=5)` before streaming. See `mekamon/commands.py`
+(`JOINT_RANGES`, `NEUTRAL_POSE`) and `mekamon/motion.py`.
 
 ## Related joint commands (for later)
 * `SetupJointAngles=60` — enable joint-angle control/streaming (sent before poses).

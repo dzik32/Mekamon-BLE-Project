@@ -135,6 +135,11 @@ def clamp_i8(value: int) -> int:
     return v & 0xFF
 
 
+def clamp_u8(value: int) -> int:
+    """Clamp to an unsigned byte (0..255). Used for joint angles, which are unsigned."""
+    return max(0, min(255, int(round(value))))
+
+
 # --------------------------------------------------------------------------- #
 #  PacketType enum  (full command table from dump.cs:440705)
 # --------------------------------------------------------------------------- #

@@ -25,7 +25,7 @@ from typing import Callable, Optional, Sequence
 
 from . import commands
 from .ble import FoundDevice, MekamonBLE, scan as _scan
-from .protocol import PacketType
+from .protocol import KinematicStanceType, PacketType
 
 Mode = str  # "drive" | "joint" | "idle"
 
@@ -44,11 +44,12 @@ class MekamonController:
         )
         self._stream_period = 1.0 / stream_hz
         self._stream_task: Optional[asyncio.Task] = None
+        self._motion_playing = False
 
         # streamed state
         self._mode: Mode = "idle"
         self._drive = (0, 0, 0)                       # forward, strafe, turn
-        self._joints = ((0, 0, 0),) * 4               # FL, FR, BL, BR
+        self._joints = (commands.NEUTRAL_POSE,) * 4   # FL, FR, BL, BR (standing)
 
         # user callbacks (called from the BLE thread — marshal to GUI yourself)
         self.on_response: Optional[Callable[[PacketType, bytes, bool], None]] = None
@@ -124,7 +125,7 @@ class MekamonController:
                     await self.ble.send_payload(
                         commands.transform(forward, strafe, turn)
                     )
-                elif self._mode == "joint":
+                elif self._mode == "joint" and not self._motion_playing:
                     fl, fr, bl, br = self._joints
                     await self.ble.send_payload(
                         commands.set_leg_joint_angles(fl, fr, bl, br)
@@ -143,8 +144,8 @@ class MekamonController:
         """Switch the streamed command between 'drive', 'joint', and 'idle'."""
         self._mode = mode
         if mode == "joint":
-            # best-effort: enable joint-angle control before streaming poses
-            self._spawn(self.ble.send_payload(commands.setup_joint_angles(True)))
+            # Put the robot in direct-joint-control mode before streaming poses.
+            self.send_payload(commands.kinematic_stance(KinematicStanceType.LegJointAngles))
 
     def set_drive(self, forward: int, strafe: int, turn: int) -> None:
         """Set the streamed drive vector. forward(+)/back(-), strafe right(+)/left(-), turn."""
@@ -186,6 +187,36 @@ class MekamonController:
     def twitch(self, direction: int, severity: int) -> None:
         self.send_payload(commands.twitch(direction, severity))
 
+    def play_gait_preset(self, params_floats) -> None:
+        """Apply a gait from the 10 normalised floats (see commands.gait_params_to_bytes)."""
+        self.gait_set_all(commands.gait_params_to_bytes(*params_floats))
+
+    def play_motion(self, motion) -> None:
+        """Replay a recovered MekaMotion animation by streaming joint poses."""
+        self._spawn(self._run_motion(motion))
+
+    def stop_motion(self) -> None:
+        self._motion_playing = False
+
+    async def _run_motion(self, motion) -> None:
+        if not self.ble.is_connected:
+            return
+        self._motion_playing = True
+        self._mode = "joint"
+        await self.ble.send_payload(
+            commands.kinematic_stance(KinematicStanceType.LegJointAngles))
+        await asyncio.sleep(0.1)
+        period = 1.0 / (motion.fps or 30)
+        try:
+            for pose in motion.poses:
+                if not self.ble.is_connected or not self._motion_playing:
+                    break
+                self._joints = pose
+                await self.ble.send_payload(commands.set_leg_joint_angles(*pose))
+                await asyncio.sleep(period)
+        finally:
+            self._motion_playing = False
+
     def send_payload(self, payload: bytes) -> None:
         """Send any raw payload (no-op if not connected). See ``commands.raw``."""
         if self.is_connected:
@@ -193,6 +224,7 @@ class MekamonController:
 
     def stop(self) -> None:
         """Emergency stop: zero the drive vector and ask the robot to halt streams."""
+        self._motion_playing = False
         self._drive = (0, 0, 0)
         self._mode = "drive"
         self._spawn(self.ble.send_payload(commands.transform(0, 0, 0)))

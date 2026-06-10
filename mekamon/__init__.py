@@ -3,7 +3,8 @@
 No firmware modification: this talks to the stock robot over its Nordic UART Service
 using the reverse-engineered "Hermes" protocol (see ``MEKAMON_PROTOCOL.md``).
 """
-from . import commands, protocol
+from . import commands, motion, protocol
+from .motion import Motion, list_motions, load_motion
 from .protocol import (
     AnimationTransformType,
     GaitParameterType,
@@ -14,11 +15,15 @@ from .protocol import (
     build_frame,
 )
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     "commands",
     "protocol",
+    "motion",
+    "Motion",
+    "load_motion",
+    "list_motions",
     "PacketType",
     "TransformMode",
     "KinematicStanceType",
