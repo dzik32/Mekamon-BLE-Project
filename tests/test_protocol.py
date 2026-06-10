@@ -50,11 +50,37 @@ def test_checksum_is_mod_255_plus_1():
 
 
 def test_transform_official_5byte_form():
-    # [6, mode, strafe, forward, turn]; default mode = Walking (3).
+    # [6, mode, AxisA=forward, AxisB=strafe, AxisC=turn]; default mode = Walking (3).
     assert commands.transform(0, 0, 0) == bytes([6, 3, 0, 0, 0])
+    # transform(forward=10, strafe=20, turn=30)
     assert commands.transform(10, 20, 30, mode=0) == bytes([6, 0, 10, 20, 30])
     # negative axes -> two's-complement bytes
     assert commands.transform(-1, -2, -3, mode=4) == bytes([6, 4, 0xFF, 0xFE, 0xFD])
+
+
+def test_movement_command_layouts():
+    # PlayAnimation: [220, id, blendIn, blendOut, layering, transform] (6 bytes)
+    assert commands.play_animation(7) == bytes([220, 7, 0, 0, 100, 0])
+    assert commands.play_animation(5, 1, 2, 50, 3) == bytes([220, 5, 1, 2, 50, 3])
+    # TakeSteps: [224, count] (unsigned)
+    assert commands.take_steps(200) == bytes([224, 200])
+    # KinematicStance: [8, type]
+    assert commands.kinematic_stance(5) == bytes([8, 5])
+    # GaitSetAll: [13, 10 params]
+    g = commands.gait_set_all(list(range(10)))
+    assert len(g) == 11 and g[0] == 13 and list(g[1:]) == list(range(10))
+    # GaitSet: [4, gaitId, paramType, value]
+    assert commands.gait_set(0, 2, 200) == bytes([4, 0, 2, 200])
+    # Twitch: [31, direction, severity]
+    assert commands.twitch(1, -2) == bytes([31, 1, 0xFE])
+
+
+def test_gait_set_all_requires_10():
+    try:
+        commands.gait_set_all([1, 2, 3])
+    except ValueError:
+        return
+    raise AssertionError("gait_set_all should reject a non-10-length list")
 
 
 def test_cobs_roundtrip():

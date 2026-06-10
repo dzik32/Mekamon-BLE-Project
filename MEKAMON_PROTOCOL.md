@@ -64,7 +64,7 @@ App struct: `float AxisA, AxisB, AxisC; Mode`. **Confirmed wire form** (from
 ```
 [6, Mode, AxisA, AxisB, AxisC]
 #     Mode = TransformMode (Rotation=0, Translation=1, CenterPoint=2, Walking=3, DeadReckoning=4)
-#     AxisA = strafe (x), AxisB = forward (y), AxisC = turn (rotation)
+#     AxisA = forward(+)/back(-), AxisB = strafe right(+)/left(-), AxisC = turn  (verified live)
 ```
 Each axis is a **plain `(byte)(int)float`** — *no scale factor*; the float values are
 already in robot units. The app clamps axes to **±127.0** (`0x42FE0000`/`0xC2FE0000`

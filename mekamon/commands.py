@@ -16,7 +16,14 @@ from __future__ import annotations
 
 from typing import Iterable, Sequence
 
-from .protocol import PacketType, TransformMode, clamp_i8
+from .protocol import (
+    AnimationTransformType,
+    GaitParameterType,
+    KinematicStanceType,
+    PacketType,
+    TransformMode,
+    clamp_i8,
+)
 
 # A per-leg joint triple: (hip, knee, thigh), each a signed int8 (-128..127).
 JointTriple = Sequence[int]
@@ -37,24 +44,24 @@ def game_state(state: int = 1, force_defaults: int | None = None) -> bytes:
     return bytes([PacketType.GameState, clamp_i8(state), clamp_i8(force_defaults)])
 
 
-def transform(strafe: int, forward: int, turn: int,
+def transform(forward: int, strafe: int, turn: int,
               mode: int = TransformMode.Walking) -> bytes:
     """Drive command — body transform / locomotion vector.
 
     Wire form (confirmed from the app's ``TransformRequest.Encode``, 5 bytes)::
 
-        [6, mode, strafe, forward, turn]
+        [6, mode, AxisA=forward, AxisB=strafe, AxisC=turn]
 
-    ``mode`` is the byte **right after** the command id (default ``Walking`` = 3, which is
-    what the app's ``BuildMovementRequest`` uses for joystick driving). ``strafe`` =
-    AxisA (left/right), ``forward`` = AxisB, ``turn`` = AxisC — each a signed int8,
-    clamped to ±127 (the app clamps to ±127.0 in dead-reckoning).
+    Axis meanings were verified live on the robot:
+    **AxisA = forward(+)/back(-)**, **AxisB = right(+)/left(-) strafe**, **AxisC = turn**.
+    ``mode`` is the byte right after the command id (default ``Walking`` = 3, what the app's
+    ``BuildMovementRequest`` uses). Each value is a signed int8, clamped to ±127.
     """
     return bytes([
         PacketType.Transform,
         clamp_i8(int(mode)),
-        clamp_i8(strafe),
         clamp_i8(forward),
+        clamp_i8(strafe),
         clamp_i8(turn),
     ])
 
@@ -104,18 +111,68 @@ def setup_joint_angles(enable: bool = True) -> bytes:
     return bytes([PacketType.SetupJointAngles, 1 if enable else 0])
 
 
-def play_animation(animation_id: int) -> bytes:
-    """Play a built-in animation by id. Payload ``[220, animation_id, ...]``.
+def play_animation(animation_id: int, blend_in: int = 0, blend_out: int = 0,
+                   layering: int = 100,
+                   transform: int = AnimationTransformType.NoTransform) -> bytes:
+    """Play an animation by id. Payload (6 bytes, confirmed from ``PlayAnimation.Encode``)::
 
-    Only the leading ``animation_id`` byte is confirmed; blend/layer fields are
-    appended as zeros by default.
+        [220, AnimationId, BlendInTime, BlendOutTime, LayeringPercent, TransformType]
+
+    Each field is a single byte. ``animation_id`` is 0..255 (content-driven, so which ids
+    map to which moves is best found by experiment). ``layering`` is a 0..100 percent;
+    ``transform`` is an :class:`AnimationTransformType` (mirror/rotate the move).
     """
-    return bytes([PacketType.PlayAnimation, clamp_i8(animation_id)])
+    return bytes([
+        PacketType.PlayAnimation,
+        animation_id & 0xFF,
+        blend_in & 0xFF,
+        blend_out & 0xFF,
+        layering & 0xFF,
+        int(transform) & 0xFF,
+    ])
 
 
 def take_steps(count: int) -> bytes:
-    """Walk a fixed number of steps. Payload ``[224, count]`` (structure unconfirmed)."""
-    return bytes([PacketType.TakeSteps, clamp_i8(count)])
+    """Walk a fixed number of step cycles. Payload ``[224, count]`` (count 0..255)."""
+    return bytes([PacketType.TakeSteps, count & 0xFF])
+
+
+def kinematic_stance(stance: int = KinematicStanceType.Kinematic) -> bytes:
+    """Set the body control mode. Payload ``[8, KinematicStanceType]`` (confirmed).
+
+    ``LegJointAngles`` (5) is the mode that enables direct per-joint control.
+    """
+    return bytes([PacketType.KinematicStance, int(stance) & 0xFF])
+
+
+def gait_set_all(params: Sequence[int]) -> bytes:
+    """Set all 10 gait parameters at once. Payload (11 bytes, confirmed)::
+
+        [13, StanceAngle, StanceDistance, WalkingSpeed, StepDuration, StepShift,
+             StepHeight, GaitType, BodyHeight, CrankRandomness, StanceRandomness]
+
+    ``params`` must be 10 bytes (0..255) in :class:`GaitParameterType` order. The app
+    derives these from floats via per-parameter conversions; here they are raw bytes to
+    tune by experiment (the ``GaitType`` slot uses :class:`GaitType` values, e.g. 2=Trot).
+    """
+    params = list(params)
+    if len(params) != 10:
+        raise ValueError("gait_set_all needs exactly 10 parameter bytes")
+    return bytes([PacketType.GaitSetAll, *(p & 0xFF for p in params)])
+
+
+def gait_set(gait_id: int, parameter: int, value: int) -> bytes:
+    """Set one gait parameter. Payload ``[4, GaitId, GaitParameterType, value]`` (confirmed).
+
+    ``parameter`` is a :class:`GaitParameterType`; ``value`` is the raw converted byte.
+    """
+    return bytes([PacketType.GaitSet, gait_id & 0xFF,
+                  int(parameter) & 0xFF, value & 0xFF])
+
+
+def twitch(direction: int, severity: int) -> bytes:
+    """A small reactive jolt. Payload ``[31, Direction, Severity]`` (from struct fields)."""
+    return bytes([PacketType.Twitch, clamp_i8(direction), clamp_i8(severity)])
 
 
 def kill_streams() -> bytes:

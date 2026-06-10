@@ -36,7 +36,12 @@ except ModuleNotFoundError:
         "(or: python -m pip install PySide6 bleak)"
     )
 
-from mekamon import MekamonController, PacketType
+from mekamon import (
+    GaitParameterType,
+    GaitType,
+    KinematicStanceType,
+    MekamonController,
+)
 
 DRIVE_SCALE = 80          # joystick edge -> int8 drive value (max useful ~80)
 TURN_SCALE = 80
@@ -144,13 +149,14 @@ class MainWindow(QMainWindow):
         col.addWidget(self._build_connection_box())
         col.addWidget(self._build_drive_box())
         col.addWidget(self._build_head_box())
-        col.addWidget(self._build_anim_box())
+        col.addWidget(self._build_moves_box())
         col.addStretch(1)
         return col
 
     def _build_right_column(self):
         col = QVBoxLayout()
         col.addWidget(self._build_limbs_box(), 1)
+        col.addWidget(self._build_gait_box())
         col.addWidget(self._build_log_box())
         return col
 
@@ -178,7 +184,7 @@ class MainWindow(QMainWindow):
         return box
 
     def _build_drive_box(self):
-        box = QGroupBox("Drive  (WASD = move, Q/E = turn, Space = stop)")
+        box = QGroupBox("Drive  (W/S = fwd/back, A/D = left/right, Q/E = turn, Space = stop)")
         v = QVBoxLayout(box)
         self.joystick = Joystick(190)
         self.joystick.moved.connect(self._on_stick)
@@ -215,18 +221,81 @@ class MainWindow(QMainWindow):
             h.addWidget(b)
         return box
 
-    def _build_anim_box(self):
-        box = QGroupBox("Animations  (ids unverified — experiment)")
-        h = QHBoxLayout(box)
-        h.addWidget(QLabel("Animation id"))
+    def _build_moves_box(self):
+        box = QGroupBox("Moves")
+        v = QVBoxLayout(box)
+
+        # Animation (id is content-driven -> experiment)
+        h1 = QHBoxLayout()
+        h1.addWidget(QLabel("Animation id"))
         self.anim_id = QSpinBox()
         self.anim_id.setRange(0, 255)
-        h.addWidget(self.anim_id)
+        h1.addWidget(self.anim_id)
         play = QPushButton("Play")
         play.clicked.connect(lambda: self.controller.play_animation(self.anim_id.value()))
-        h.addWidget(play)
-        h.addStretch(1)
+        h1.addWidget(play)
+        h1.addStretch(1)
+        v.addLayout(h1)
+        v.addWidget(QLabel("(animation ids are content-driven — try values to find moves)"))
+
+        # Take steps
+        h2 = QHBoxLayout()
+        h2.addWidget(QLabel("Walk"))
+        self.step_count = QSpinBox()
+        self.step_count.setRange(1, 255)
+        self.step_count.setValue(3)
+        h2.addWidget(self.step_count)
+        h2.addWidget(QLabel("step cycles"))
+        go = QPushButton("Go")
+        go.clicked.connect(lambda: self.controller.take_steps(self.step_count.value()))
+        h2.addWidget(go)
+        h2.addStretch(1)
+        v.addLayout(h2)
+
+        # Body / stance mode
+        h3 = QHBoxLayout()
+        h3.addWidget(QLabel("Body mode"))
+        self.stance_combo = QComboBox()
+        for s in KinematicStanceType:
+            self.stance_combo.addItem(s.name, int(s))
+        self.stance_combo.setCurrentText("Kinematic")
+        h3.addWidget(self.stance_combo)
+        setb = QPushButton("Set")
+        setb.clicked.connect(
+            lambda: self.controller.kinematic_stance(self.stance_combo.currentData())
+        )
+        h3.addWidget(setb)
+        h3.addStretch(1)
+        v.addLayout(h3)
         return box
+
+    def _build_gait_box(self):
+        box = QGroupBox("Gait tuning  (raw 0–255 bytes — experiment)")
+        v = QVBoxLayout(box)
+        grid = QGridLayout()
+        self.gait_sliders = {}
+        defaults = {GaitParameterType.GaitType: int(GaitType.Trot)}
+        for i, p in enumerate(GaitParameterType):
+            grid.addWidget(QLabel(p.name), i, 0)
+            s = QSlider(Qt.Horizontal)
+            s.setRange(0, 255)
+            s.setValue(defaults.get(p, 128))
+            lbl = QLabel(str(s.value()))
+            lbl.setMinimumWidth(30)
+            s.valueChanged.connect(lambda val, l=lbl: l.setText(str(val)))
+            grid.addWidget(s, i, 1)
+            grid.addWidget(lbl, i, 2)
+            self.gait_sliders[p] = s
+        v.addLayout(grid)
+        self.gait_apply = QPushButton("Apply gait")
+        self.gait_apply.clicked.connect(self._apply_gait)
+        v.addWidget(self.gait_apply)
+        return box
+
+    def _apply_gait(self):
+        params = [self.gait_sliders[p].value() for p in GaitParameterType]
+        self.controller.gait_set_all(params)
+        self._log(f"-> GaitSetAll {params}")
 
     def _build_limbs_box(self):
         box = QGroupBox("Limb control — 12 joints (signed int8; scaling needs live calibration)")
@@ -366,7 +435,7 @@ class MainWindow(QMainWindow):
         strafe = int(x * DRIVE_SCALE)
         forward = int(y * DRIVE_SCALE)
         turn = int(self._turn * TURN_SCALE)
-        self.controller.set_drive(strafe, forward, turn)
+        self.controller.set_drive(forward, strafe, turn)
 
     # ---- limbs ---------------------------------------------------------- #
     def _on_joint_mode(self, on):
@@ -466,7 +535,7 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     w = MainWindow()
-    w.resize(900, 640)
+    w.resize(1040, 880)
     w.show()
     sys.exit(app.exec())
 

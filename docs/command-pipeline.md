@@ -102,7 +102,7 @@ per-field scaling** — fields are emitted as raw low bytes in struct order.
 |----:|------|------:|--------------------------------------------------|----------|
 | 16  | ConnectionEstablished | 1 | `[16]` | — |
 | 7   | GameState | 2–3 | `[7, GameState, ForceDefaults?]` | — |
-| 6   | **Transform** (drive) | 5 | `[6, Mode, AxisA(strafe), AxisB(fwd), AxisC(turn)]` — Mode is byte #1; driving Mode=Walking=3; axes clamp ±127; floats via `vcvt` (no scale) | `0x1866DE8` |
+| 6   | **Transform** (drive) | 5 | `[6, Mode, AxisA(forward), AxisB(strafe right+), AxisC(turn)]` — Mode is byte #1; driving Mode=Walking=3; axes clamp ±127; floats via `vcvt` (no scale) | `0x1866DE8` |
 | 46  | HeadColourSet | 4 | `[46, R, G, B]` | — |
 | 8   | KinematicStance | 2 | `[8, KinematicStanceType]` | — |
 | 58  | **SetLegJointAngles** | 13 | `[58, FL.Knee, FL.Thigh, FL.Hip, FR.Knee, FR.Thigh, FR.Hip, BL.Knee, BL.Thigh, BL.Hip, BR.Knee, BR.Thigh, BR.Hip]` — per-leg order **Knee, Thigh, Hip**; legs FL,FR,BL,BR | `0x185DAA8` |

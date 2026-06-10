@@ -245,3 +245,49 @@ class TransformMode(IntEnum):
     CenterPoint = 2
     Walking = 3
     DeadReckoning = 4
+
+
+class KinematicStanceType(IntEnum):
+    """``KinematicStance`` (cmd 8) body-control mode. ``LegJointAngles`` is the mode that
+    must be active for direct ``SetLegJointAngles`` control to take effect."""
+
+    Gyrate = 0
+    Mimic = 1
+    Linear = 2
+    Kinematic = 3
+    LegControlPoint = 4
+    LegJointAngles = 5
+    Create = 6
+
+
+class GaitParameterType(IntEnum):
+    """The 10 gait knobs carried (in this order) by ``GaitSetAll`` (cmd 13)."""
+
+    StanceAngle = 0
+    StanceDistance = 1
+    WalkingSpeed = 2
+    StepDuration = 3
+    StepShift = 4
+    StepHeight = 5
+    GaitType = 6
+    BodyHeight = 7
+    CrankRandomness = 8
+    StanceRandomness = 9
+
+
+class GaitType(IntEnum):
+    """Value for the ``GaitType`` gait parameter."""
+
+    Trot = 2
+    Crawl = 4
+
+
+class AnimationTransformType(IntEnum):
+    """``PlayAnimation`` (cmd 220) last byte — mirror/rotate the played animation."""
+
+    NoTransform = 0
+    MirrorLeftRight = 1
+    MirrorFrontBack = 2
+    Rotate90CCW = 3
+    Rotate180CCW = 4
+    Rotate270CCW = 5

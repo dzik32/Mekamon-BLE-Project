@@ -47,7 +47,7 @@ class MekamonController:
 
         # streamed state
         self._mode: Mode = "idle"
-        self._drive = (0, 0, 0)                       # strafe, forward, turn
+        self._drive = (0, 0, 0)                       # forward, strafe, turn
         self._joints = ((0, 0, 0),) * 4               # FL, FR, BL, BR
 
         # user callbacks (called from the BLE thread — marshal to GUI yourself)
@@ -120,8 +120,10 @@ class MekamonController:
         try:
             while self.ble.is_connected:
                 if self._mode == "drive":
-                    s, f, t = self._drive
-                    await self.ble.send_payload(commands.transform(s, f, t))
+                    forward, strafe, turn = self._drive
+                    await self.ble.send_payload(
+                        commands.transform(forward, strafe, turn)
+                    )
                 elif self._mode == "joint":
                     fl, fr, bl, br = self._joints
                     await self.ble.send_payload(
@@ -144,8 +146,9 @@ class MekamonController:
             # best-effort: enable joint-angle control before streaming poses
             self._spawn(self.ble.send_payload(commands.setup_joint_angles(True)))
 
-    def set_drive(self, strafe: int, forward: int, turn: int) -> None:
-        self._drive = (int(strafe), int(forward), int(turn))
+    def set_drive(self, forward: int, strafe: int, turn: int) -> None:
+        """Set the streamed drive vector. forward(+)/back(-), strafe right(+)/left(-), turn."""
+        self._drive = (int(forward), int(strafe), int(turn))
         if self._mode != "drive":
             self.set_mode("drive")
 
@@ -164,17 +167,29 @@ class MekamonController:
             self.set_mode("joint")
 
     def set_head_colour(self, r: int, g: int, b: int) -> None:
-        self._spawn(self.ble.send_payload(commands.head_colour(r, g, b)))
+        self.send_payload(commands.head_colour(r, g, b))
 
-    def play_animation(self, animation_id: int) -> None:
-        self._spawn(self.ble.send_payload(commands.play_animation(animation_id)))
+    def play_animation(self, animation_id: int, blend_in: int = 0, blend_out: int = 0,
+                       layering: int = 100, transform: int = 0) -> None:
+        self.send_payload(commands.play_animation(
+            animation_id, blend_in, blend_out, layering, transform))
 
     def take_steps(self, count: int) -> None:
-        self._spawn(self.ble.send_payload(commands.take_steps(count)))
+        self.send_payload(commands.take_steps(count))
+
+    def kinematic_stance(self, stance: int) -> None:
+        self.send_payload(commands.kinematic_stance(stance))
+
+    def gait_set_all(self, params) -> None:
+        self.send_payload(commands.gait_set_all(params))
+
+    def twitch(self, direction: int, severity: int) -> None:
+        self.send_payload(commands.twitch(direction, severity))
 
     def send_payload(self, payload: bytes) -> None:
-        """Escape hatch: send any raw payload (see ``commands.raw``)."""
-        self._spawn(self.ble.send_payload(payload))
+        """Send any raw payload (no-op if not connected). See ``commands.raw``."""
+        if self.is_connected:
+            self._spawn(self.ble.send_payload(payload))
 
     def stop(self) -> None:
         """Emergency stop: zero the drive vector and ask the robot to halt streams."""

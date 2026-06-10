@@ -107,6 +107,7 @@ Each command is `wire = COBS(payload) + checksum + 0x00`, where
 Connect handshake: `ConnectionEstablished[16]` → `GameState[7,1]` → `Transform[6,0,0,0]`,
 then stream `Transform`. Full details in **[`MEKAMON_PROTOCOL.md`](MEKAMON_PROTOCOL.md)**,
 the end-to-end send path (app → BLE) in **[`docs/command-pipeline.md`](docs/command-pipeline.md)**,
+every movement command in **[`docs/movement.md`](docs/movement.md)**,
 and the 12-joint encoding in **[`docs/joint-encoding.md`](docs/joint-encoding.md)**.
 
 ## Status & roadmap
@@ -115,9 +116,11 @@ and the 12-joint encoding in **[`docs/joint-encoding.md`](docs/joint-encoding.md
 |------|-------|
 | COBS + `mod-255` checksum framing | ✅ byte-exact (confirmed from native `CalculateChecksum`), unit-tested |
 | Scan / connect / handshake | ✅ implemented |
-| Drive (Transform) | ✅ confirmed wire form `[6, Mode, strafe, fwd, turn]`, Mode=Walking, ±127 |
+| Drive (Transform) | ✅ confirmed `[6, Mode, forward, strafe, turn]` (axes verified live), Mode=Walking, ±127 |
 | Head LED | ✅ confirmed `[46, R, G, B]` |
-| 12-joint control (`SetLegJointAngles`) | ✅ **wire order confirmed** (13-byte, per-leg Knee/Thigh/Hip); ⚠️ angle **scaling needs live calibration** |
+| Walk steps / animations / stance | ✅ decoded: TakeSteps `[224,n]`, PlayAnimation `[220,id,…]`, KinematicStance `[8,type]` |
+| Gait tuning (`GaitSetAll`) | ✅ 11-byte layout + 10 params decoded; raw bytes (float→byte scaling TBD) |
+| 12-joint control (`SetLegJointAngles`) | ✅ wire order confirmed; ⚠️ angle **scaling needs live calibration** (next) |
 | Animations / gaits / stance | 🟡 command ids known; payload layouts to verify live |
 | Response parsing (battery, acks) | 🟡 framing done; per-type decoders TBD |
 
