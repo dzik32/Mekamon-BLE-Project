@@ -11,7 +11,7 @@ a Python library, a desktop **GUI**, and **direct control of all 12 leg joints**
 
 ---
 
-## ⬇️ Just want to use it? (no Python, nothing to install)
+##  Just want to use it? (no Python, nothing to install)
 
 The app ships as **one self-contained `MekamonController.exe`** — Python, the BLE stack
 and the GUI are all bundled inside it. There is nothing to install.
@@ -29,17 +29,17 @@ The rest of this README is for developers who want to run from source or rebuild
 
 ## Features
 
-- 🎮 **Drive** — virtual joystick + keyboard (WASD / Q-E / Space).
-- 🦿 **Full limb control** — all 12 joints directly, with the **real 0–255 ranges** and
+-  **Drive** — virtual joystick + keyboard (WASD / Q-E / Space).
+-  **Full limb control** — all 12 joints directly, with the **real 0–255 ranges** and
   standing pose recovered from the app data (this is what makes it actually move).
-- 💃 **Play your saved animations** — replays recovered MekaMotion `.motion` files by
+-  **Play your saved animations** — replays recovered MekaMotion `.motion` files by
   streaming joint poses (8 of the user's animations bundled).
-- 🦗 **Gait tuning** — all 10 gait parameters with the float→byte scaling decoded, plus
+-  **Gait tuning** — all 10 gait parameters with the float→byte scaling decoded, plus
   recovered presets (fast trot / slow crawl).
-- 🎬 **Animations / steps / body modes** — `PlayAnimation`, `TakeSteps`, `KinematicStance`.
-- 💡 **Head LED** — set any RGB colour.
-- 🧩 **Clean Python API** — `bleak`-based, byte-exact framing, fully scriptable.
-- 🛑 **Emergency stop** baked into the controller and GUI.
+-  **Animations / steps / body modes** — `PlayAnimation`, `TakeSteps`, `KinematicStance`.
+-  **Head LED** — set any RGB colour.
+-  **Clean Python API** — `bleak`-based, byte-exact framing, fully scriptable.
+-  **Emergency stop** baked into the controller and GUI.
 
 ## Requirements
 
@@ -165,12 +165,6 @@ MEKAMON_PROTOCOL.md full reverse-engineered protocol reference
 
 The reverse-engineering inputs (the APK and the `il2cpp/` decompile, ~230 MB and
 copyrighted) are intentionally **git-ignored** — only the distilled findings are tracked.
-
-## Safety
-
-- Give the robot clear space; start joint values near 0 and move one at a time.
-- **Space** (or the red button) is an emergency stop.
-- This project never touches firmware — the robot stays stock and recoverable.
 
 ## License
 
